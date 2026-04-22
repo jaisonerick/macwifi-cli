@@ -87,28 +87,19 @@ jobs:
           git push origin main
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: Compute next macwifi-cli tag
-        id: nexttag
-        if: steps.commit.outputs.changed == 'true'
-        run: |
-          # Latest semver tag on origin (we just fetched), default to v0.0.0.
-          git fetch --tags --force
-          LATEST=$(git tag --list 'v*' --sort=-v:refname | head -1)
-          if [ -z "$LATEST" ]; then
-            NEW_TAG="v0.0.1"
-          else
-            # Bump patch.
-            NEW_TAG=$(echo "$LATEST" | awk -F. -v OFS=. '{ $NF = $NF + 1; print }')
-          fi
-          echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
-          echo "Next tag: $NEW_TAG (previous: ${LATEST:-none})"
-
       - name: Tag and push
         if: steps.commit.outputs.changed == 'true'
         env:
-          NEW_TAG: ${{ steps.nexttag.outputs.tag }}
-          NEW_VERSION: ${{ steps.ver.outputs.version }}
+          NEW_TAG: ${{ steps.ver.outputs.version }}
         run: |
-          git tag -a "$NEW_TAG" -m "Auto-release after macwifi $NEW_VERSION"
+          # Versions are strictly mirrored: macwifi-cli tag == macwifi tag.
+          # If the tag already exists upstream we treat it as an idempotent
+          # replay and exit cleanly rather than failing the workflow.
+          git fetch --tags --force
+          if git rev-parse -q --verify "refs/tags/$NEW_TAG" >/dev/null; then
+            echo "Tag $NEW_TAG already exists. Nothing to do — chain is idempotent."
+            exit 0
+          fi
+          git tag -a "$NEW_TAG" -m "Auto-release mirroring macwifi $NEW_TAG"
           git push origin "$NEW_TAG"
           echo "Pushed $NEW_TAG; release.yml will pick it up from the tag push."
