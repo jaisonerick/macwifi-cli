@@ -1,0 +1,114 @@
+name: Bump macwifi dependency
+
+# Listens for repository_dispatch events fired by jaisonerick/macwifi
+# whenever a new release is published there. Bumps go.mod to the new
+# version, commits to main, and tags a patch release. The push of the
+# new tag triggers .github/workflows/release.yml, which builds the
+# binary and updates the Homebrew formula in jaisonerick/homebrew-tap.
+#
+# Required secret:
+#   MACWIFI_CLI_PUSH_TOKEN
+#     Fine-grained PAT with `Contents: read and write` on
+#     jaisonerick/macwifi-cli. Tag pushes from this PAT trigger
+#     subsequent workflow runs (which the default GITHUB_TOKEN
+#     intentionally cannot do).
+
+on:
+  repository_dispatch:
+    types: [macwifi-released]
+  # Manual trigger for testing or for catching up after a missed dispatch.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "macwifi version to pin (e.g. v1.2.3)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve target version
+        id: ver
+        env:
+          DISPATCH_VERSION: ${{ github.event.client_payload.version }}
+          MANUAL_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$DISPATCH_VERSION" ]; then
+            VERSION="$DISPATCH_VERSION"
+          else
+            VERSION="$MANUAL_VERSION"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "::error::No version supplied via dispatch payload or manual input."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Targeting macwifi $VERSION"
+
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.MACWIFI_CLI_PUSH_TOKEN }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache: true
+
+      - name: Bump macwifi in go.mod
+        env:
+          NEW_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          go get "github.com/jaisonerick/macwifi@${NEW_VERSION}"
+          go mod tidy
+
+      - name: Configure git identity
+        run: |
+          git config user.name "jaisonerick-bot"
+          git config user.email "jaisonreis@gmail.com"
+
+      - name: Commit go.mod/go.sum if changed
+        id: commit
+        env:
+          NEW_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          if git diff --quiet -- go.mod go.sum; then
+            echo "go.mod already pins macwifi to ${NEW_VERSION}; nothing to do."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git add go.mod go.sum
+          git commit -m "chore(deps): bump macwifi to ${NEW_VERSION}"
+          git push origin main
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Compute next macwifi-cli tag
+        id: nexttag
+        if: steps.commit.outputs.changed == 'true'
+        run: |
+          # Latest semver tag on origin (we just fetched), default to v0.0.0.
+          git fetch --tags --force
+          LATEST=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          if [ -z "$LATEST" ]; then
+            NEW_TAG="v0.0.1"
+          else
+            # Bump patch.
+            NEW_TAG=$(echo "$LATEST" | awk -F. -v OFS=. '{ $NF = $NF + 1; print }')
+          fi
+          echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+          echo "Next tag: $NEW_TAG (previous: ${LATEST:-none})"
+
+      - name: Tag and push
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          NEW_TAG: ${{ steps.nexttag.outputs.tag }}
+          NEW_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          git tag -a "$NEW_TAG" -m "Auto-release after macwifi $NEW_VERSION"
+          git push origin "$NEW_TAG"
+          echo "Pushed $NEW_TAG; release.yml will pick it up from the tag push."
