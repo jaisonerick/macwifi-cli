@@ -1,15 +1,17 @@
 # GoReleaser config for macwifi-cli.
 #
-# Local release flow (used to bootstrap the first release):
+# Local release flow:
 #
-#     git tag v0.1.0
-#     git push origin v0.1.0
+#     git tag v0.1.1
+#     git push origin v0.1.1
 #     export GITHUB_TOKEN=$(gh auth token)
+#     export HOMEBREW_TAP_GITHUB_TOKEN=$(gh auth token)
 #     goreleaser release --clean
 #
-# After the workflow at .github/workflows/release.yml is wired up with
-# the HOMEBREW_TAP_GITHUB_TOKEN secret, tagging is enough — CI handles
-# the rest.
+# In CI (.github/workflows/release.yml), GITHUB_TOKEN is provided by
+# Actions automatically; HOMEBREW_TAP_GITHUB_TOKEN must be configured
+# as a repository secret pointing at a PAT with contents:write on
+# jaisonerick/homebrew-tap (see the workflow file for setup steps).
 
 version: 2
 
@@ -69,6 +71,10 @@ brews:
       owner: jaisonerick
       name: homebrew-tap
       branch: main
+      # The regular GITHUB_TOKEN in CI can't push to other repos, so
+      # we always read the cross-repo token from a separate env var.
+      # Locally: export HOMEBREW_TAP_GITHUB_TOKEN=$(gh auth token).
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     directory: Formula
     homepage: "https://github.com/jaisonerick/macwifi-cli"
     description: "Drop-in airport replacement for macOS 13+. Scans Wi-Fi networks, inspects the current connection, and reads saved Keychain passwords."

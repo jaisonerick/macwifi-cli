@@ -1,0 +1,52 @@
+name: Release
+
+# Cuts a release whenever a tag matching v* is pushed.
+#
+# To enable Homebrew formula auto-updates, the repository needs a
+# secret named HOMEBREW_TAP_GITHUB_TOKEN — a fine-grained Personal
+# Access Token with `contents: read and write` on the
+# jaisonerick/homebrew-tap repository. Create one at:
+#
+#   https://github.com/settings/personal-access-tokens/new
+#     - Resource owner:        jaisonerick
+#     - Repository access:     Only select repositories → homebrew-tap
+#     - Repository permissions: Contents → Read and write
+#
+# Then add it under
+#   https://github.com/jaisonerick/macwifi-cli/settings/secrets/actions
+# as HOMEBREW_TAP_GITHUB_TOKEN.
+#
+# Until that secret is set, the release will succeed but the brew
+# formula update step will fail (and you can retry locally with
+# `GITHUB_TOKEN=$(gh auth token) goreleaser release --clean`).
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache: true
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
