@@ -1,0 +1,89 @@
+# GoReleaser config for macwifi-cli.
+#
+# Local release flow (used to bootstrap the first release):
+#
+#     git tag v0.1.0
+#     git push origin v0.1.0
+#     export GITHUB_TOKEN=$(gh auth token)
+#     goreleaser release --clean
+#
+# After the workflow at .github/workflows/release.yml is wired up with
+# the HOMEBREW_TAP_GITHUB_TOKEN secret, tagging is enough — CI handles
+# the rest.
+
+version: 2
+
+project_name: macwifi-cli
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: macwifi-cli
+    main: .
+    binary: macwifi-cli
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: macwifi-cli
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+
+release:
+  github:
+    owner: jaisonerick
+    name: macwifi-cli
+  draft: false
+  prerelease: auto
+
+brews:
+  - name: macwifi-cli
+    repository:
+      owner: jaisonerick
+      name: homebrew-tap
+      branch: main
+    directory: Formula
+    homepage: "https://github.com/jaisonerick/macwifi-cli"
+    description: "Drop-in airport replacement for macOS 13+. Scans Wi-Fi networks, inspects the current connection, and reads saved Keychain passwords."
+    license: "MIT"
+    commit_author:
+      name: jaisonerick-bot
+      email: jaisonreis@gmail.com
+    commit_msg_template: "chore(macwifi-cli): bump formula to {{ .Tag }}"
+    test: |
+      assert_match "macwifi-cli", shell_output("#{bin}/macwifi-cli help")
+      assert_match version.to_s, shell_output("#{bin}/macwifi-cli version")
+    caveats: |
+      macwifi-cli only supports macOS 13+ on Apple Silicon.
+
+      The first run of `macwifi-cli scan` triggers the macOS Location
+      Services prompt. Approve it to receive real BSSIDs back from
+      future scans. You can review the permission any time at:
+        System Settings > Privacy & Security > Location Services
