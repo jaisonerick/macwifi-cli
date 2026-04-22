@@ -8,7 +8,7 @@ and read saved Keychain passwords. Works on macOS 13+, returns real
 BSSIDs, no `sudo` required.
 
 ```sh
-go install github.com/jaisonerick/macwifi-cli@latest
+brew install jaisonerick/tap/macwifi-cli
 
 macwifi-cli scan
 macwifi-cli info
@@ -36,7 +36,20 @@ real data.
 
 ## Install
 
-Requires Go 1.26+.
+### Homebrew (recommended)
+
+```sh
+brew install jaisonerick/tap/macwifi-cli
+```
+
+This pulls a pre-built `darwin/arm64` binary from the
+[`jaisonerick/homebrew-tap`](https://github.com/jaisonerick/homebrew-tap)
+formula and drops it into `/opt/homebrew/bin`. Upgrade with
+`brew upgrade macwifi-cli`.
+
+### `go install`
+
+If you have a Go toolchain and would rather build from source:
 
 ```sh
 go install github.com/jaisonerick/macwifi-cli@latest
@@ -44,6 +57,14 @@ go install github.com/jaisonerick/macwifi-cli@latest
 
 The binary lands in `$(go env GOBIN)` (or `$GOPATH/bin`). Make sure
 that directory is on your `$PATH`.
+
+### Pre-built binaries
+
+Tarballs for tagged releases are attached to each
+[GitHub Release](https://github.com/jaisonerick/macwifi-cli/releases).
+Download, extract, drop the binary somewhere on your `$PATH`.
+
+Requires macOS 13+ on Apple Silicon. Intel Macs are not supported.
 
 ## Usage
 
